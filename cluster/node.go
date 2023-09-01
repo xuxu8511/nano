@@ -44,11 +44,11 @@ import (
 
 // Options contains some configurations for current node
 type Options struct {
-	Pipeline           pipeline.Pipeline
-	IsMaster           bool
-	AdvertiseAddr      string
+	Pipeline           pipeline.Pipeline //pipeline回调
+	IsMaster           bool              //是否作为master
+	AdvertiseAddr      string            //master地址
 	RetryInterval      time.Duration
-	ClientAddr         string
+	ClientAddr         string //自身对外提供服务地址
 	Components         *component.Components
 	Label              string
 	IsWebsocket        bool
@@ -78,14 +78,19 @@ type Node struct {
 }
 
 func (n *Node) Startup() error {
+	//没设置服务启动地址时，服务无法启动报异常
 	if n.ServiceAddr == "" {
 		return errors.New("service address cannot be empty in master node")
 	}
+
 	n.sessions = map[int64]*session.Session{}
+	//初始化集群信息
 	n.cluster = newCluster(n)
+	//初始化handler信息
 	n.handler = NewHandler(n, n.Pipeline)
 	components := n.Components.List()
 	for _, c := range components {
+		//注册components包含的handler
 		err := n.handler.register(c.Comp, c.Opts)
 		if err != nil {
 			return err
@@ -126,6 +131,10 @@ func (n *Node) Handler() *LocalHandler {
 	return n.handler
 }
 
+/*
+*
+这段是相对复杂的地方
+*/
 func (n *Node) initNode() error {
 	// Current node is not master server and does not contains master
 	// address, so running in singleton mode
@@ -133,12 +142,14 @@ func (n *Node) initNode() error {
 		return nil
 	}
 
+	//启动对内服务
 	listener, err := net.Listen("tcp", n.ServiceAddr)
 	if err != nil {
 		return err
 	}
 
 	// Initialize the gRPC server and register service
+	//初始化grpc客户端
 	n.server = grpc.NewServer()
 	n.rpcClient = newRPCClient()
 	clusterpb.RegisterMemberServer(n.server, n)
@@ -150,6 +161,10 @@ func (n *Node) initNode() error {
 		}
 	}()
 
+	/**
+	master时，通过grpc注册为master，并将node信息绑定到members对象上
+	非master时，初始化master客户端，并获取cluster内其他服务信息
+	*/
 	if n.IsMaster {
 		clusterpb.RegisterMasterServer(n.server, n.cluster)
 		member := &Member{
@@ -161,12 +176,14 @@ func (n *Node) initNode() error {
 			},
 		}
 		n.cluster.members = append(n.cluster.members, member)
+		//todo rpcclient的作用？
 		n.cluster.setRpcClient(n.rpcClient)
 	} else {
 		pool, err := n.rpcClient.getConnPool(n.AdvertiseAddr)
 		if err != nil {
 			return err
 		}
+
 		client := clusterpb.NewMasterClient(pool.Get())
 		request := &clusterpb.RegisterRequest{
 			MemberInfo: &clusterpb.MemberInfo{
@@ -176,15 +193,19 @@ func (n *Node) initNode() error {
 			},
 		}
 		for {
+			//注册到master
 			resp, err := client.Register(context.Background(), request)
 			if err == nil {
+				//缓存远程服务信息，addr -> services
 				n.handler.initRemoteService(resp.Members)
+				//缓存远程服务信息，
 				n.cluster.initMembers(resp.Members)
 				break
 			}
 			log.Println("Register current node to cluster failed", err, "and will retry in", n.RetryInterval.String())
 			time.Sleep(n.RetryInterval)
 		}
+		// 心跳协议
 		n.once.Do(n.keepalive)
 	}
 	return nil

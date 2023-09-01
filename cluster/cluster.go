@@ -36,11 +36,11 @@ import (
 // from client will send to gate firstly and be forwarded to appropriate node.
 type cluster struct {
 	// If cluster is not large enough, use slice is OK
-	currentNode *Node
-	rpcClient   *rpcClient
+	currentNode *Node      //自身node
+	rpcClient   *rpcClient //rpc客户端
 
 	mu      sync.RWMutex
-	members []*Member
+	members []*Member //其他非master node信息
 }
 
 func newCluster(currentNode *Node) *cluster {

@@ -56,6 +56,7 @@ type rpcHandler func(session *session.Session, msg *message.Message, noCopy bool
 // CustomerRemoteServiceRoute customer remote service route
 type CustomerRemoteServiceRoute func(service string, session *session.Session, members []*clusterpb.MemberInfo) *clusterpb.MemberInfo
 
+// todo 作何用？
 func cache() {
 	hrdata := map[string]interface{}{
 		"code": 200,
@@ -119,6 +120,7 @@ func NewHandler(currentNode *Node, pipeline pipeline.Pipeline) *LocalHandler {
 	return h
 }
 
+// todo component和service的区别是什么？
 func (h *LocalHandler) register(comp component.Component, opts []component.Option) error {
 	s := component.NewService(comp, opts)
 
@@ -126,6 +128,7 @@ func (h *LocalHandler) register(comp component.Component, opts []component.Optio
 		return fmt.Errorf("handler: service already defined: %s", s.Name)
 	}
 
+	//todo 抽取的实现值得学习
 	if err := s.ExtractHandler(); err != nil {
 		return err
 	}

@@ -71,6 +71,9 @@ func Listen(addr string, opts ...Option) {
 		env.Wd, _ = filepath.Abs(wd)
 	}
 
+	//调用初始化回调函数，初始化Options参数
+	//核心参数有: IsMaster、AdvertiseAddr等
+	//
 	opt := cluster.Options{
 		Components: &component.Components{},
 	}
@@ -89,14 +92,21 @@ func Listen(addr string, opts ...Option) {
 		opt.RetryInterval = time.Second * 3
 	}
 
+	/*
+		node和cluster的关系
+		node即为一个个Tcp服务端
+		cluster即为node集合
+	*/
 	node := &cluster.Node{
 		Options:     opt,
 		ServiceAddr: addr,
 	}
+	//初始化和启动服务
 	err := node.Startup()
 	if err != nil {
 		log.Fatalf("Node startup failed: %v", err)
 	}
+	//初始化全局变量
 	runtime.CurrentNode = node
 
 	if node.ClientAddr != "" {
@@ -107,6 +117,7 @@ func Listen(addr string, opts ...Option) {
 			app.name, node.ServiceAddr))
 	}
 
+	//自定义定时器
 	go scheduler.Sched()
 	sg := make(chan os.Signal)
 	signal.Notify(sg, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGKILL, syscall.SIGTERM)
