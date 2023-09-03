@@ -46,6 +46,7 @@ type (
 	}
 )
 
+// NewService 通过初始化反射扫描，将component和方法抽取成service和handler，内部运转中用的是后者。
 func NewService(comp Component, opts []Option) *Service {
 	s := &Service{
 		Type:     reflect.TypeOf(comp),
